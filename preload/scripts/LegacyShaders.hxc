@@ -1,0 +1,134 @@
+import funkin.modding.module.Module;
+import funkin.ui.options.OptionsState;
+import funkin.save.Save;
+import funkin.play.PlayState;
+import flixel.FlxG;
+import flixel.FlxSprite;
+import Std;
+
+class LegacyShaders extends Module
+{
+    var save = null;
+    var lastShadersEnabled:Bool = true;
+
+    function bindSave()
+    {
+        save = Save.instance;
+    }
+
+    public function new()
+    {
+        super("LegacyShaders", 1);
+        bindSave();
+
+        if (save.modOptions["Shaders"] == null)
+            save.modOptions["Shaders"] = true;
+
+        lastShadersEnabled = save.modOptions["Shaders"];
+    }
+
+    override function onUpdate(event:Dynamic)
+    {
+        super.onUpdate(event);
+
+        var current:Bool = save.modOptions["Shaders"];
+
+        if (current != lastShadersEnabled)
+        {
+            lastShadersEnabled = current;
+
+            if (!current)
+                disableAllShaders();
+        }
+    }
+
+    override function onStateChangeEnd(event:Dynamic)
+    {
+        super.onStateChangeEnd(event);
+
+        // Añadir opción en Preferences
+        if (Std.isOfType(event.targetState, OptionsState))
+        {
+            var prefs = event.targetState.optionsCodex.pages.get("preferences");
+            if (prefs == null) return;
+
+            bindSave();
+
+            prefs.createPrefItemCheckbox(
+                "Shaders",
+                "If disabled, removes shaders from characters and cameras for better performance.",
+                function(value)
+                {
+                    save.modOptions["Shaders"] = value;
+                    lastShadersEnabled = value;
+
+                    if (!value)
+                        disableAllShaders();
+                },
+                save.modOptions["Shaders"]
+            );
+        }
+
+        // Al entrar a PlayState
+        if (Std.isOfType(event.targetState, PlayState))
+        {
+            if (!save.modOptions["Shaders"])
+                disableAllShaders();
+        }
+    }
+
+    override function onSongLoaded(event:Dynamic)
+    {
+        if (!save.modOptions["Shaders"])
+            disableAllShaders();
+    }
+
+    override function onCountdownStart(event:Dynamic)
+    {
+        super.onCountdownStart(event);
+
+        if (!save.modOptions["Shaders"])
+            disableAllShaders();
+    }
+
+    override function onSongRetry(event:Dynamic)
+    {
+        if (!save.modOptions["Shaders"])
+            disableAllShaders();
+    }
+
+    function disableAllShaders():Void
+    {
+        var game = PlayState.instance;
+        if (game == null) return;
+
+        // Personajes
+        var bf = (game.currentStage != null) ? game.currentStage.getBoyfriend() : null;
+        var dad = (game.currentStage != null) ? game.currentStage.getDad() : null;
+        var gf = (game.currentStage != null) ? game.currentStage.getGirlfriend() : null;
+
+        if (bf != null) bf.shader = null;
+        if (dad != null) dad.shader = null;
+        if (gf != null) gf.shader = null;
+
+        // Todo el stage
+        if (game.currentStage != null)
+        {
+            game.currentStage.forEachAlive(function(sprite:FlxSprite)
+            {
+                if (sprite != null)
+                    sprite.shader = null;
+            });
+        }
+
+        // Cámaras
+        if (game.camGame != null)
+            game.camGame.filters = [];
+
+        if (game.camHUD != null)
+            game.camHUD.filters = [];
+
+        if (FlxG.camera != null)
+            FlxG.camera.filters = [];
+    }
+}
